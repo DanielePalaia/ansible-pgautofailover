@@ -1,0 +1,8 @@
+---
+- name: Copy user key to hosts
+  hosts: all
+  vars:
+    pubkey: "~/.ssh/id_rsa.pub"
+
+  tasks:
+    - authorized_key: user={{ ansible_user_id }} key="{{ lookup('file', pubkey) }}"

@@ -1,0 +1,3 @@
+pip==9.0.1
+setuptools>=17.1
+ansible==2.3.0.0

@@ -1,0 +1,13 @@
+[Unit]
+Description = pg_auto_failover
+
+[Service]
+WorkingDirectory = /var/lib/pgsql
+Environment = 'PGDATA=/var/lib/pgsql/datanew'
+User = postgres
+ExecStart = /usr/bin/pg_autoctl run
+Restart = always
+StartLimitBurst = 0
+
+[Install]
+WantedBy = multi-user.target

@@ -1,0 +1,93 @@
+---
+- name: PgAutofailover and Vmware postgresql installation process
+  hosts: all 
+  vars:
+    vmw_postgres_package: /Users/dpalaia/projects/ansible/ansible-101/bin/vmware-postgres-13.2-0.el7.x86_64.rpm 
+    postgres_systemd: /Users/dpalaia/projects/ansible/ansible-101/conf/postgresql.service
+    pgautofailover_systemd: /Users/dpalaia/projects/ansible/ansible-101/conf/pgautofailover.service
+    data_dir: /var/lib/pgsql/datanew
+    host0: 192.168.12.138
+    host1: 192.168.12.137
+    host2: 192.168.12.136
+  tasks:
+    - name: mkdir /home/osboxes/postgres
+      file: path=/home/osboxes/postgres state=directory
+
+    - name: copy vmware postgresql RPMs to /home/osboxes/postgres
+      copy:
+        src:  "{{ vmw_postgres_package }}" 
+        dest: /home/osboxes/postgres
+      with_fileglob:
+        - "./*.rpm"
+      register: rpms_copied
+
+    - name: local RPMs not found
+      fail:
+        msg: "RPMs not found in ../files/"
+      when: rpms_copied.results|length == 0 and rpms_copied.skipped and rpms_copied.skipped_reason.find('No items') != -1
+   
+    - set_fact:
+        rpm_list: "{{ rpms_copied.results | map(attribute='dest') | list}}"
+
+    - name: install RPMs
+      yum:
+        name: "{{rpm_list}}"
+      become: true
+      become_user: root  
+
+    #- name: initialize database
+    #  command: initdb -D /var/lib/pgsql/data
+    #  become: true
+    #  become_user: postgres
+
+    - name: copy generic postgresql systemd file in /etc/systemd/system
+      copy:
+        src:  "{{ postgres_systemd }}"
+        dest: /etc/systemd/system
+      become: true
+      become_user: root
+
+    - name: copy generic pgautofailover systemd file in /etc/systemd/system
+      copy:
+        src:  "{{ pgautofailover_systemd }}"
+        dest: /etc/systemd/system
+      become: true
+      become_user: root
+
+    - name: Initialize pgautofailover create the monitor
+      become: yes
+      become_user: postgres
+      run_once: yes
+      shell: nohup pg_autoctl create monitor --hostname "{{ host0 }}"  --run --pgdata "{{ data_dir }}" --pgport 5432 --no-ssl --auth trust &
+      delegate_to: "{{ host0 }}"
+
+    - name: Pause for 5 minutes to build app cache
+      pause:
+        minutes: 2
+
+    - name: Initialize pgautofailover create the primary
+      become: yes
+      become_user: postgres
+      run_once: yes
+      shell: nohup pg_autoctl create postgres --hostname "{{ host1 }}"  --run --pgdata "{{ data_dir }}" --pgport 5432 --no-ssl --auth trust  --monitor postgres://autoctl_node@"{{ host0 }}":5432/pg_auto_failover?sslmode=prefer --pgctl /bin/pg_ctl &
+      delegate_to: "{{ host1 }}"
+
+    - name: Pause for 5 minutes to build app cache
+      pause:
+        minutes: 2
+
+    - name: Initialize pgautofailover create the replica
+      become: yes
+      run_once: yes
+      become_user: postgres
+      shell: nohup pg_autoctl create postgres --hostname "{{ host2 }}"  --run --pgdata "{{ data_dir }}" --pgport 5432 --no-ssl --auth trust  --monitor postgres://autoctl_node@"{{ host0 }}":5432/pg_auto_failover?sslmode=prefer --pgctl /bin/pg_ctl &
+      delegate_to: "{{ host2 }}"
+
+
+    - name: Restart service pgautofailover on centos, in all cases, also issue daemon-reload to pick up config changes
+      ansible.builtin.systemd:
+        state: restarted
+        daemon_reload: yes
+        name: pgautofailover
+      become: true
+      become_user: root     
