@@ -1,8 +1,13 @@
 ---
 - name: Copy user key to hosts
-  hosts: all
-  vars:
-    pubkey: "~/.ssh/id_rsa.pub"
+  hosts: localhost 
 
   tasks:
-    - authorized_key: user={{ ansible_user_id }} key="{{ lookup('file', pubkey) }}"
+  - name: setup pub key in remote host
+    command: ssh-copy-id osboxes@192.168.12.138
+
+  - name: setup pub key in remote host
+    command: ssh-copy-id osboxes@192.168.12.137
+
+  - name: setup pub key in remote host
+    command: ssh-copy-id osboxes@192.168.12.136
