@@ -9,6 +9,16 @@ https://github.com/citusdata/pg_auto_failover</br>
 
 ## How to use the script
 
+### Set up python virtual environment
+
+The script uses a python virtual env so you need first to:
+
+```
+virtualenv venv
+. venv/bin/activate
+pip install --upgrade setuptools pip
+pip install -r requirements.txt
+```
 
 ### Set up the hosts
 
